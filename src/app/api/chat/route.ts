@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     // 3. Inject CSV Data if it exists
     let finalSystemPrompt = initialSystemPrompt;
     if (data) {
-      console.log("📂 Injecting File Data into AI Context...");
+      console.log("Injecting File Data into AI Context...");
       finalSystemPrompt += `\n\nUSER UPLOADED FILE CONTEXT:
       The user has uploaded a file with the following data:
       ${JSON.stringify(data).slice(0, 20000)} 

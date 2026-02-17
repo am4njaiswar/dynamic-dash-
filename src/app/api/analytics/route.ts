@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { getSalesData } from "@/lib/data"; // Re-using your DB connection
 import mongoose from "mongoose";
 
-// Define a schema if you haven't already in lib/models.ts
 // This is just to ensure we can use Mongoose models directly
 const SaleSchema = new mongoose.Schema({
   product: String,
