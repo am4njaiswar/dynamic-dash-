@@ -1,78 +1,97 @@
 "use client";
 
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, LayoutDashboard, Database } from "lucide-react";
-import { motion } from "framer-motion";
+import { MessageSquare, Clock, LayoutDashboard, Command } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-// Define our navigation links here so we can map through them
 const navItems = [
-  { name: "Chat", href: "/", icon: <MessageSquare size={16} /> },
-  { name: "Analytics", href: "/analytics", icon: <LayoutDashboard size={16} /> },
+  { name: "Chat", link: "/", icon: <MessageSquare className="h-4 w-4" /> },
+  { name: "History", link: "/history", icon: <Clock className="h-4 w-4" /> },
+  {
+    name: "Analytics",
+    link: "/analytics",
+    icon: <LayoutDashboard className="h-4 w-4" />,
+  },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   return (
-    <motion.nav 
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 }}
-      className="fixed top-6 inset-x-0 max-w-2xl mx-auto z-50 px-4"
-    >
-      <div className="flex items-center justify-between px-3 py-2 bg-black/40 backdrop-blur-2xl border border-white/[0.08] rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.8)]">
-        
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 pl-3 relative group">
-          <div className="absolute inset-0 bg-blue-600 blur-md opacity-40 group-hover:opacity-80 transition-opacity duration-500 rounded-full"></div>
-          <div className="w-5 h-5 rounded-full bg-blue-600 relative z-10 border border-blue-400/50"></div>
-          <span className="font-bold text-zinc-100 tracking-wide text-sm hidden sm:block relative z-10">
-            Dynamic<span className="text-blue-500">Dash</span>
+    <div className="fixed top-6 inset-x-0 z-50 flex justify-center pointer-events-none">
+      <motion.nav
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="pointer-events-auto relative flex items-center justify-between gap-6 px-6 py-3 rounded-full bg-[#09090b]/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] min-w-85 sm:min-w-187.5"
+      >
+        {/* LEFT: LOGO */}
+        <Link href="/" className="flex items-center gap-2">
+          <span className="font-semibold text-zinc-100 tracking-tight hidden sm:block text-lg">
+            Dynamic Dash
           </span>
         </Link>
 
-        {/* Links with Sliding Pill Animation */}
-        <div className="flex items-center gap-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            
+        <div className="flex items-center gap-2">
+          {navItems.map((item, idx) => {
+            const isActive = pathname === item.link;
+
             return (
               <Link
                 key={item.name}
-                href={item.href}
-                className={`relative px-4 py-2.5 rounded-full flex items-center gap-2 text-sm font-medium transition-colors duration-300 ${
-                  isActive ? "text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                href={item.link}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className="relative px-5 py-2.5 rounded-full text-sm font-medium transition-colors"
               >
-                {/* This is the Aceternity Magic: 
-                  Framer Motion's layoutId ensures this background pill slides smoothly between active tabs 
-                */}
+                <span
+                  className={cn(
+                    "relative z-10 transition-colors duration-200 flex items-center gap-2",
+                    isActive
+                      ? "text-white"
+                      : "text-zinc-400 hover:text-zinc-200",
+                  )}
+                >
+                  <span className="sm:hidden">{item.icon}</span>
+                  <span className="hidden sm:inline-block">{item.name}</span>
+                </span>
+
+                <AnimatePresence>
+                  {hoveredIndex === idx && (
+                    <motion.span
+                      className="absolute inset-0 rounded-full bg-zinc-800/50 block z-0"
+                      layoutId="hoverBackground"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{
+                        type: "spring",
+                        bounce: 0.2,
+                        duration: 0.3,
+                      }}
+                    />
+                  )}
+                </AnimatePresence>
+
                 {isActive && (
-                  <motion.div
-                    layoutId="active-nav-pill"
-                    className="absolute inset-0 bg-white/[0.08] border border-white/[0.1] rounded-full z-[-1]"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
+                  <span className="absolute inset-0 rounded-full bg-zinc-800 border border-white/5 -z-10" />
                 )}
-                
-                {item.icon}
-                <span className="hidden sm:block">{item.name}</span>
               </Link>
             );
           })}
         </div>
 
-        {/* Aceternity Style Connect DB Button */}
-        <button className="relative group flex items-center gap-2 text-xs font-semibold bg-transparent text-white border border-white/[0.1] px-5 py-2.5 rounded-full overflow-hidden transition-all hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(37,99,235,0.3)]">
-          {/* Animated Gradient Background on Hover */}
-          <div className="absolute inset-0 bg-linear-to-r from-blue-600/40 to-cyan-500/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          
-          <Database size={14} className="relative z-10 group-hover:text-cyan-300 transition-colors" />
-          <span className="relative z-10">Connect DB</span>
-        </button>
-
-      </div>
-    </motion.nav>
+        <div>
+          <button className="flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+            <span className="hidden sm:inline">Connect DB</span>
+            <span className="sm:hidden">DB</span>
+          </button>
+        </div>
+      </motion.nav>
+    </div>
   );
 }

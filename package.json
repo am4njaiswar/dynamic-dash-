@@ -11,6 +11,9 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.22",
     "@google/generative-ai": "^0.24.1",
+    "@tsparticles/engine": "^3.9.1",
+    "@tsparticles/react": "^3.0.0",
+    "@tsparticles/slim": "^3.9.1",
     "ai": "^4.3.19",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.5",
