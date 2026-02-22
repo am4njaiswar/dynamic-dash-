@@ -2,15 +2,24 @@
 
 import { useChat } from "@ai-sdk/react";
 import { Paperclip, User, Command, RefreshCw, Plus, X, FileText } from "lucide-react";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { Spotlight } from "@/components/ui/spotlight-new";
 import ChartDisplay from "@/components/ChartsDisplay";
 
-export default function Dashboard() {
-  const [sessionId, setSessionId] = useState<string>("");
+// We extract the main UI into a separate component so we can wrap it in Suspense for Next.js
+function ChatDashboard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlSessionId = searchParams.get("sessionId");
+
+  // Track the active MongoDB document ID
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(urlSessionId);
+  const activeSessionIdRef = useRef(activeSessionId);
+
   const [fileContext, setFileContext] = useState<any>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -20,19 +29,15 @@ export default function Dashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Keep the Ref in sync with state so the async onFinish function can read it
   useEffect(() => {
-    let currentSession = localStorage.getItem("dynamic_dash_session");
-    if (!currentSession) {
-      currentSession = `session-${Date.now()}`;
-      localStorage.setItem("dynamic_dash_session", currentSession);
-    }
-    setSessionId(currentSession);
-  }, []);
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   // --- AI CHAT SETUP ---
   const { messages, isLoading, setMessages, append, reload } = useChat({
     body: {
-      userId: sessionId,
+      userId: "user_123", // Using the same hardcoded user for solo development
       data: fileContext,
     },
     onFinish: async (message) => {
@@ -40,14 +45,24 @@ export default function Dashboard() {
       const fullHistory = [...latestMessages, message];
 
       try {
-        await fetch("/api/history", {
+        const res = await fetch("/api/history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: sessionId,
+            userId: "user_123",
+            sessionId: activeSessionIdRef.current, // Pass the active ID (null if brand new)
             messages: fullHistory, 
           }),
         });
+        
+        const savedSession = await res.json();
+
+        // If this was a brand new chat, the DB just created an ID. 
+        // Save it and put it in the URL so the next message stays in the same chat!
+        if (!activeSessionIdRef.current && savedSession._id) {
+          setActiveSessionId(savedSession._id);
+          router.push(`/?sessionId=${savedSession._id}`, { scroll: false });
+        }
       } catch (error) {
         console.error("Failed to save history:", error);
       }
@@ -63,27 +78,38 @@ export default function Dashboard() {
   }, [messages]);
 
   // --- HISTORY LOADER ---
+  // This runs when the page loads or when the URL changes
   useEffect(() => {
-    if (!sessionId) return; 
-    
     const loadHistory = async () => {
-      try {
-        const res = await fetch(`/api/history?userId=${sessionId}`);
-        const savedMessages = await res.json();
-        
-        if (Array.isArray(savedMessages) && savedMessages.length > 0) {
-          const safeMessages = savedMessages.map((msg: any, index: number) => ({
-             ...msg,
-             id: msg.id || msg._id || `history-${Date.now()}-${index}`,
-          }));
-          setMessages(safeMessages);
+      if (urlSessionId) {
+        try {
+          // Fetch all sessions for the user
+          const res = await fetch(`/api/history?userId=user_123`);
+          const allSessions = await res.json();
+          
+          // Find the specific session that matches the URL
+          const currentSession = allSessions.find((s: any) => s._id === urlSessionId);
+          
+          if (currentSession && currentSession.messages) {
+            const safeMessages = currentSession.messages.map((msg: any, index: number) => ({
+               ...msg,
+               id: msg.id || msg._id || `history-${Date.now()}-${index}`,
+            }));
+            setMessages(safeMessages);
+            setActiveSessionId(urlSessionId);
+          }
+        } catch (error) {
+          console.error("Failed to load history:", error);
         }
-      } catch (error) {
-        console.error("Failed to load history:", error);
+      } else {
+        // If there is no ID in the URL, clear the screen for a fresh chat
+        setMessages([]);
+        setActiveSessionId(null);
       }
     };
+    
     loadHistory();
-  }, [sessionId, setMessages]);
+  }, [urlSessionId, setMessages]);
 
   // --- FILE HANDLING ---
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,14 +139,13 @@ export default function Dashboard() {
 
   // --- ACTIONS ---
   const handleNewChat = () => {
-    const newSession = `session-${Date.now()}`;
-    setSessionId(newSession);
-    localStorage.setItem("dynamic_dash_session", newSession);
-    
+    // Clear the slate and wipe the URL clean
     setMessages([]);
     messagesRef.current = [];
     setFileContext(null);
     setFileName(null);
+    setActiveSessionId(null);
+    router.push("/"); 
   };
 
   const handleRemoveFile = () => {
@@ -132,9 +157,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    const newMessage = { role: "user", content: inputValue, id: Date.now().toString() };
-    messagesRef.current = [...messages, newMessage];
-
+    // We let `append` handle the AI state internally
     append({ role: "user", content: inputValue });
     setInputValue("");
 
@@ -152,7 +175,6 @@ export default function Dashboard() {
   ];
 
   return (
-    // 1. Adjusted top padding for mobile vs desktop
     <div className="flex flex-col h-screen pt-24 sm:pt-32 md:pt-36 overflow-hidden max-w-5xl mx-auto w-full relative">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".csv" />
 
@@ -174,7 +196,6 @@ export default function Dashboard() {
       )}
 
       {/* CHAT AREA */}
-      {/* 2. Reduced side padding on mobile (px-3) for more screen space */}
       <div className="flex-1 overflow-y-auto pb-4 px-3 sm:px-6 scroll-smooth no-scrollbar w-full">
         {messages.length === 0 ? (
           <div className="h-full w-full flex flex-col items-center justify-center mt-[-5vh]">
@@ -207,7 +228,6 @@ export default function Dashboard() {
                     </div>
                   )}
                   
-                  {/* 3. MOBILE BUBBLE FIX: Expanded max-w to 92% on mobile, tight padding */}
                   <div className={`text-[15px] sm:text-[16px] leading-relaxed max-w-[92%] sm:max-w-[85%] md:max-w-[80%] overflow-hidden ${
                       m.role === "user"
                         ? "bg-zinc-800/80 text-zinc-100 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl rounded-tr-sm border border-white/5 shadow-md"
@@ -232,7 +252,6 @@ export default function Dashboard() {
                           {m.content}
                         </ReactMarkdown>
 
-                        {/* CHART RENDERER - Added overflow-x-auto for safe mobile swiping */}
                         {m.toolInvocations && m.toolInvocations.map((toolInvocation: any) => {
                           const toolCallId = toolInvocation.toolCallId;
                           if (toolInvocation.toolName === 'render_chart') {
@@ -299,7 +318,6 @@ export default function Dashboard() {
             )}
           </AnimatePresence>
 
-          {/* 4. BUTTON FIX: Reduced gap and button sizes on mobile to give the input more room */}
           <div className="flex items-center gap-2 sm:gap-3 w-full">
             <button
               type="button"
@@ -335,5 +353,14 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Next.js requires any component using 'useSearchParams' to be wrapped in a Suspense boundary
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-[#0d0d12] text-zinc-500">Loading Workspace...</div>}>
+      <ChatDashboard />
+    </Suspense>
   );
 }

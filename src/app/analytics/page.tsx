@@ -1,43 +1,31 @@
 import { BarChart3, TrendingUp, Database, FileText, Activity } from "lucide-react";
 import { Spotlight } from "@/components/ui/spotlight-new";
 
-// Helper function to hit your API route
-async function fetchAnalytics(type: string) {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+async function getWorkspaceStats() {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/analytics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type }),
-      cache: "no-store", // Ensures fresh data
+    const res = await fetch(`${baseUrl}/api/analytics?userId=user_123`, { 
+      cache: 'no-store' 
     });
-    
-    if (!res.ok) throw new Error("Failed to fetch");
-    const json = await res.json();
-    return json.data;
+    if (!res.ok) throw new Error("Failed to fetch analytics");
+    return await res.json();
   } catch (error) {
-    console.error(`Error fetching ${type}:`, error);
-    return null;
+    console.error(error);
+    return { totalFiles: 0, queriesExecuted: 0, insightsGenerated: 0, activeDatabases: 0 };
   }
 }
 
 export default async function AnalyticsPage() {
-  // Fetch real data from the backend
-  const [kpiSummary, topProducts] = await Promise.all([
-    fetchAnalytics("kpi_summary"),
-    fetchAnalytics("top_products"),
-  ]);
+  const data = await getWorkspaceStats();
 
-  // Extract the data from the aggregation arrays
-  const kpis = kpiSummary?.[0] || { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0 };
-  const topProduct = topProducts?.[0]?._id || "None yet";
-
-  // Map the real data to your UI cards
   const stats = [
-    { label: "Total Revenue", value: `$${kpis.totalRevenue.toLocaleString()}`, icon: FileText, color: "text-blue-400" },
-    { label: "Total Orders", value: kpis.totalOrders.toLocaleString(), icon: Database, color: "text-emerald-400" },
-    { label: "Avg Order Value", value: `$${Math.round(kpis.avgOrderValue).toLocaleString()}`, icon: Activity, color: "text-purple-400" },
-    { label: "Top Product", value: topProduct, icon: BarChart3, color: "text-amber-400" },
+    { label: "Active Files Analyzed", value: data.totalFiles, icon: FileText, color: "text-blue-400" },
+    { label: "Queries Executed", value: data.queriesExecuted, icon: Database, color: "text-emerald-400" },
+    { label: "Insights Generated", value: data.insightsGenerated, icon: Activity, color: "text-purple-400" },
+    { label: "Active Databases", value: data.activeDatabases, icon: BarChart3, color: "text-amber-400" },
   ];
 
   return (
@@ -52,7 +40,7 @@ export default async function AnalyticsPage() {
           Workspace Analytics
         </h1>
         <p className="text-zinc-400 mt-2 text-sm sm:text-base">
-          Monitor your actual database sales, order volume, and AI interactions.
+          Monitor your data usage and AI interactions in real-time.
         </p>
       </div>
 
@@ -66,16 +54,16 @@ export default async function AnalyticsPage() {
               </div>
             </div>
             <h3 className="text-zinc-400 text-sm font-medium tracking-wide mb-1">{stat.label}</h3>
-            <p className="text-2xl sm:text-3xl font-bold text-zinc-100 truncate">{stat.value}</p>
+            <p className="text-3xl font-bold text-zinc-100">{stat.value}</p>
           </div>
         ))}
       </div>
-
-      {/* PLACEHOLDER FOR MACRO CHARTS */}
+      
+      {/* MACRO CHARTS PLACEHOLDER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-[400px] flex flex-col justify-center items-center text-zinc-500 shadow-lg">
           <BarChart3 size={48} className="mb-4 opacity-20" />
-          <p>Query Volume Trend (Connect Chart library to view daily_trend)</p>
+          <p>Query Volume Trend (Data connected)</p>
         </div>
         <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-[400px] flex flex-col justify-center items-center text-zinc-500 shadow-lg">
           <Activity size={48} className="mb-4 opacity-20" />

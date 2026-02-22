@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
 import { ChatSession } from "@/models/ChatSessionSchema";
-import {dbConnect} from "@/lib/db"; // Assuming your DB connection utility
+import { dbConnect } from "@/lib/db";
 
 export async function GET(req: Request) {
   try {
     await dbConnect();
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+    const userId = searchParams.get("userId") || "user_123";
 
-    if (!userId) {
-      return NextResponse.json({ error: "UserId is required" }, { status: 400 });
-    }
-
-    const session = await ChatSession.findOne({ userId }).sort({ lastUpdated: -1 });
-    return NextResponse.json(session?.messages || []);
+    // CHANGE: Fetch ALL sessions for the user, sorted by newest first
+    const sessions = await ChatSession.find({ userId }).sort({ lastUpdated: -1 });
+    return NextResponse.json(sessions);
   } catch (error) {
     console.error("HISTORY GET ERROR:", error);
     return NextResponse.json({ error: "Failed to fetch history" }, { status: 500 });
@@ -23,15 +20,26 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     await dbConnect();
-    const { userId, messages } = await req.json();
+    // CHANGE: Expect a sessionId from the frontend. If it doesn't exist, create a new chat.
+    const { userId, messages, sessionId } = await req.json();
 
-    const session = await ChatSession.findOneAndUpdate(
-      { userId },
-      { messages, lastUpdated: new Date() },
-      { upsert: true, new: true }
-    );
+    let session;
+    if (sessionId) {
+      // Update the specific existing chat
+      session = await ChatSession.findByIdAndUpdate(
+        sessionId,
+        { messages, lastUpdated: new Date() },
+        { new: true }
+      );
+    } else {
+      // Create a brand new chat history row
+      session = await ChatSession.create({
+        userId,
+        messages,
+        lastUpdated: new Date()
+      });
+    }
 
-    console.log("Chat history updated for user:", userId);
     return NextResponse.json(session);
   } catch (error) {
     console.error("HISTORY POST ERROR:", error);
