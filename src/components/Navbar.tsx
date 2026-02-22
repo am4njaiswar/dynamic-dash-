@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Clock, LayoutDashboard, Command } from "lucide-react";
+import { MessageSquare, Clock, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -29,16 +29,21 @@ export default function Navbar() {
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="pointer-events-auto relative flex items-center justify-between gap-6 px-6 py-3 rounded-full bg-[#09090b]/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] min-w-85 sm:min-w-187.5"
       >
-        {/* LEFT: LOGO */}
+        {/* LEFT: LOGO (Acts as a subtle "Home / Start Over" button) */}
         <Link href="/" className="flex items-center gap-2">
-          <span className="font-semibold text-zinc-100 tracking-tight hidden sm:block text-lg">
+          <span className="font-semibold text-zinc-100 tracking-tight hidden sm:block text-lg transition-colors hover:text-white">
             Dynamic Dash
           </span>
         </Link>
 
+        {/* MIDDLE: MAIN NAVIGATION */}
         <div className="flex items-center gap-2">
           {navItems.map((item, idx) => {
-            const isActive = pathname === item.link;
+            // "Chat" remains highlighted whether on the empty home screen or an active chat
+            const isActive = 
+              item.link === "/" 
+                ? pathname === "/" || pathname.startsWith("/chat")
+                : pathname.startsWith(item.link);
 
             return (
               <Link
@@ -85,6 +90,7 @@ export default function Navbar() {
           })}
         </div>
 
+        {/* RIGHT: ACTIONS */}
         <div>
           <button className="flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]">
             <span className="hidden sm:inline">Connect DB</span>

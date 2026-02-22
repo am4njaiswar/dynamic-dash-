@@ -61,11 +61,11 @@ export default async function AnalyticsPage() {
       
       {/* MACRO CHARTS PLACEHOLDER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-[400px] flex flex-col justify-center items-center text-zinc-500 shadow-lg">
+        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-100 flex flex-col justify-center items-center text-zinc-500 shadow-lg">
           <BarChart3 size={48} className="mb-4 opacity-20" />
           <p>Query Volume Trend (Data connected)</p>
         </div>
-        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-[400px] flex flex-col justify-center items-center text-zinc-500 shadow-lg">
+        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-100 flex flex-col justify-center items-center text-zinc-500 shadow-lg">
           <Activity size={48} className="mb-4 opacity-20" />
           <p>Data Sources Overview</p>
         </div>

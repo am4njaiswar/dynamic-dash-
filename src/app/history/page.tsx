@@ -1,8 +1,7 @@
 import { MessageSquare, Clock, Search, ChevronRight } from "lucide-react";
 import { Spotlight } from "@/components/ui/spotlight-new";
-import Link from "next/link"; // Added for routing
+import Link from "next/link"; 
 
-// CRITICAL FIX: Forces Next.js to never cache this page
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -64,8 +63,7 @@ export default async function HistoryPage() {
             const dateStr = new Date(session.lastUpdated).toLocaleDateString();
 
             return (
-              // Change the href below to match wherever your chat page lives (e.g., `/chat?id=...`)
-              <Link href={`/?sessionId=${session._id}`} key={session._id}>
+              <Link href={`/chat/?sessionId=${session._id}`} key={session._id}>
                 <div className="group flex items-center justify-between p-4 sm:p-5 bg-zinc-900/40 hover:bg-zinc-800/60 backdrop-blur-sm border border-white/5 rounded-2xl cursor-pointer transition-all duration-200 shadow-sm mb-3">
                   <div className="flex items-center gap-4 sm:gap-6">
                     <div className="w-10 h-10 rounded-full bg-[#09090b] border border-white/5 flex items-center justify-center shrink-0 text-zinc-400 group-hover:text-emerald-400 transition-colors">
