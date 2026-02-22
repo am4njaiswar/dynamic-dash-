@@ -2,11 +2,23 @@ import { google } from "@ai-sdk/google";
 import { streamText, tool } from "ai";
 import { z } from "zod";
 
+// 1. Import our Auth Helper and Database tools
+import { getSessionUser } from "@/lib/auth";
+import { dbConnect } from "@/lib/db"; // Adjust path if yours is different
+import {ChatSession} from "@/models/ChatSessionSchema"; // Adjust path if yours is different
+
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
-    const { messages, data } = await req.json();
+    // 2. Secure the route: Get the real logged-in user
+    const user = await getSessionUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    }
+
+    // Notice we are also extracting a sessionId if one exists!
+    const { messages, data, sessionId } = await req.json();
 
     // --- UPDATED: The Predictive Data Scientist Prompt ---
     let systemPrompt = `You are an expert data scientist, business strategist, and enterprise AI assistant. 
@@ -54,6 +66,38 @@ export async function POST(req: Request) {
         }),
       },
       
+      // 3. THE MAGIC FIX: Save to Database when the AI finishes!
+      async onFinish({ text }) {
+        try {
+          await dbConnect();
+
+          // Create the full conversation array (Previous History + User Prompt + New AI Response)
+          const updatedMessages = [
+            ...messages,
+            { role: "assistant", content: text }
+          ];
+
+          if (sessionId) {
+            // If they are continuing an old chat, update that specific session
+            await ChatSession.findByIdAndUpdate(sessionId, {
+              messages: updatedMessages,
+              lastUpdated: new Date()
+            });
+            console.log("💾 Updated existing chat session in DB");
+          } else {
+            // If it's a brand new chat, create a new session tied to THEIR user ID!
+            await ChatSession.create({
+              userId: user.id, // <--- Secured to the logged-in user!
+              messages: updatedMessages,
+              lastUpdated: new Date()
+            });
+            console.log("💾 Created new chat session in DB for user:", user.name);
+          }
+        } catch (dbError) {
+          console.error("🚨 Failed to save chat to database:", dbError);
+        }
+      },
+
       onError: (error) => {
         console.error("❌ Stream Error:", error);
       }

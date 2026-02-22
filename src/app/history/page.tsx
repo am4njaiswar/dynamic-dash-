@@ -1,25 +1,48 @@
 import { MessageSquare, Clock, Search, ChevronRight } from "lucide-react";
 import { Spotlight } from "@/components/ui/spotlight-new";
 import Link from "next/link"; 
+import { getSessionUser } from "@/lib/auth";
+import { dbConnect } from "@/lib/db";
+import { ChatSession } from "@/models/ChatSessionSchema"; // Ensure this matches the path used in Analytics
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-async function getHistorySessions() {
+// 1. Direct Database Query instead of using fetch()
+async function getHistorySessions(userId: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/history?userId=user_123`, { 
-      cache: 'no-store' 
-    });
-    if (!res.ok) throw new Error("Failed");
-    return await res.json(); 
+    await dbConnect();
+    
+    // 2. Fetch sessions, sort by newest first, and lean() to plain JS objects
+    const sessions = await ChatSession.find({ userId })
+      .sort({ lastUpdated: -1 })
+      .lean();
+    
+    // 3. Serialize the data so Next.js Server Components don't complain about MongoDB objects
+    return sessions.map((session: any) => ({
+      ...session,
+      _id: session._id.toString(),
+      messages: session.messages || [],
+    }));
   } catch (error) {
+    console.error("Database Error:", error);
     return [];
   }
 }
 
 export default async function HistoryPage() {
-  const sessions = await getHistorySessions();
+  // 4. Securely get the logged-in user
+  const user = await getSessionUser();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-zinc-400 bg-[#09090b]">
+        Please log in to view your history.
+      </div>
+    );
+  }
+
+  // 5. Fetch history bypassing the HTTP layer entirely
+  const sessions = await getHistorySessions(user.id);
 
   return (
     <div className="flex flex-col min-h-screen pt-32 pb-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full relative">
@@ -60,7 +83,7 @@ export default async function HistoryPage() {
               ? (firstUserMsg.length > 60 ? firstUserMsg.substring(0, 60) + "..." : firstUserMsg)
               : "Empty Session";
               
-            const dateStr = new Date(session.lastUpdated).toLocaleDateString();
+            const dateStr = new Date(session.lastUpdated || Date.now()).toLocaleDateString();
 
             return (
               <Link href={`/chat/?sessionId=${session._id}`} key={session._id}>

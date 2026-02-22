@@ -22,9 +22,28 @@ function ActiveChatInterface() {
   const [isUploading, setIsUploading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   
+  // 1. New state to hold the securely logged-in user
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  
   const messagesRef = useRef<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 2. Fetch the real user ID when the chat loads
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (data.user) {
+          setCurrentUser(data.user);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user");
+      }
+    };
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -32,7 +51,9 @@ function ActiveChatInterface() {
 
   // --- AI CHAT SETUP ---
   const { messages, isLoading, setMessages, append, reload } = useChat({
-    body: { userId: "user_123", data: fileContext },
+    // 3. Pass the sessionId so the backend knows which chat to update!
+    body: { data: fileContext, sessionId: activeSessionIdRef.current },
+    
     onFinish: async (message) => {
       let fullHistory = [...messagesRef.current];
       if (!fullHistory.find(m => m.id === message.id)) {
@@ -41,24 +62,28 @@ function ActiveChatInterface() {
         fullHistory = fullHistory.map(m => m.id === message.id ? message : m);
       }
 
-      try {
-        const res = await fetch("/api/history", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: "user_123",
-            sessionId: activeSessionIdRef.current, 
-            messages: fullHistory, 
-          }),
-        });
-        
-        const savedSession = await res.json();
-        if (!activeSessionIdRef.current && savedSession._id) {
-          setActiveSessionId(savedSession._id);
-          router.replace(`/chat?sessionId=${savedSession._id}`, { scroll: false });
+      // 4. Save to DB and update the URL ONLY if we have the real user
+      if (currentUser) {
+        try {
+          const res = await fetch("/api/history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: currentUser.id, // THE FIX: Real User ID
+              sessionId: activeSessionIdRef.current, 
+              messages: fullHistory, 
+            }),
+          });
+          
+          const savedSession = await res.json();
+          // Update the URL so it doesn't stay blank
+          if (!activeSessionIdRef.current && savedSession._id) {
+            setActiveSessionId(savedSession._id);
+            router.replace(`/chat?sessionId=${savedSession._id}`, { scroll: false });
+          }
+        } catch (error) {
+          console.error("Failed to save history:", error);
         }
-      } catch (error) {
-        console.error("Failed to save history:", error);
       }
     },
   });
@@ -91,9 +116,11 @@ function ActiveChatInterface() {
   // --- HISTORY LOADER ---
   useEffect(() => {
     const loadHistory = async () => {
-      if (urlSessionId) {
+      // 5. Wait until we have BOTH the sessionId and the real user data
+      if (urlSessionId && currentUser) {
         try {
-          const res = await fetch(`/api/history?userId=user_123`);
+          // THE FIX: Fetch using their actual user ID
+          const res = await fetch(`/api/history?userId=${currentUser.id}`);
           const allSessions = await res.json();
           const currentSession = allSessions.find((s: any) => s._id === urlSessionId);
           
@@ -107,7 +134,7 @@ function ActiveChatInterface() {
       }
     };
     loadHistory();
-  }, [urlSessionId, setMessages]);
+  }, [urlSessionId, setMessages, currentUser]); // Re-run when currentUser loads
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

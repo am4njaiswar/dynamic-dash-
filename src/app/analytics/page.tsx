@@ -1,25 +1,55 @@
 import { BarChart3, TrendingUp, Database, FileText, Activity } from "lucide-react";
 import { Spotlight } from "@/components/ui/spotlight-new";
+import { getSessionUser } from "@/lib/auth";
+import { dbConnect } from "@/lib/db";
+import { ChatSession } from "@/models/ChatSessionSchema"; // Make sure this path matches your project!
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-async function getWorkspaceStats() {
+// 1. Talk DIRECTLY to the database instead of using fetch()
+async function getWorkspaceStats(userId: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/analytics?userId=user_123`, { 
-      cache: 'no-store' 
+    await dbConnect();
+    
+    // Fetch ALL sessions strictly belonging to the authenticated user
+    const sessions = await ChatSession.find({ userId: userId });
+
+    let userQueries = 0;
+    let aiInsights = 0;
+
+    sessions.forEach(session => {
+      if (session.messages && Array.isArray(session.messages)) {
+        userQueries += session.messages.filter((m: any) => m.role === "user").length;
+        aiInsights += session.messages.filter((m: any) => m.role === "assistant").length;
+      }
     });
-    if (!res.ok) throw new Error("Failed to fetch analytics");
-    return await res.json();
+
+    return {
+      totalFiles: 0,
+      queriesExecuted: userQueries,
+      insightsGenerated: aiInsights,
+      activeDatabases: 0
+    };
   } catch (error) {
-    console.error(error);
+    console.error("Database Error:", error);
     return { totalFiles: 0, queriesExecuted: 0, insightsGenerated: 0, activeDatabases: 0 };
   }
 }
 
 export default async function AnalyticsPage() {
-  const data = await getWorkspaceStats();
+  // 2. Get the currently logged-in user securely
+  const user = await getSessionUser();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-zinc-400 bg-[#09090b]">
+        Please log in to view your analytics.
+      </div>
+    );
+  }
+
+  // 3. Fetch stats bypassing the HTTP layer entirely
+  const data = await getWorkspaceStats(user.id);
 
   const stats = [
     { label: "Active Files Analyzed", value: data.totalFiles, icon: FileText, color: "text-blue-400" },
@@ -37,7 +67,7 @@ export default async function AnalyticsPage() {
       <div className="mb-10">
         <h1 className="text-3xl sm:text-4xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
           <TrendingUp className="text-emerald-400" size={32} />
-          Workspace Analytics
+          {user.name}&apos;s Workspace Analytics
         </h1>
         <p className="text-zinc-400 mt-2 text-sm sm:text-base">
           Monitor your data usage and AI interactions in real-time.
