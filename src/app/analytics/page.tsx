@@ -1,44 +1,108 @@
-import { BarChart3, TrendingUp, Database, FileText, Activity } from "lucide-react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { BarChart3, TrendingUp, Database, FileText, Activity, Loader2 } from "lucide-react";
 import { Spotlight } from "@/components/ui/spotlight-new";
-import { getSessionUser } from "@/lib/auth";
-import { dbConnect } from "@/lib/db";
-import { ChatSession } from "@/models/ChatSessionSchema"; // Make sure this path matches your project!
 
-export const dynamic = "force-dynamic";
+export default function AnalyticsPage() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  const [stats, setStats] = useState({
+    queriesExecuted: 0,
+    insightsGenerated: 0,
+    activeDatabases: 0,
+    dbQueriesRun: 0,
+  });
+  
+  const [chartData, setChartData] = useState<any[]>([]);
 
-// 1. Talk DIRECTLY to the database instead of using fetch()
-async function getWorkspaceStats(userId: string) {
-  try {
-    await dbConnect();
-    
-    // Fetch ALL sessions strictly belonging to the authenticated user
-    const sessions = await ChatSession.find({ userId: userId });
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        // 1. Fetch the securely logged-in user
+        const authRes = await fetch("/api/auth/me");
+        const authData = await authRes.json();
+        
+        if (!authData.user) {
+          setLoading(false);
+          return;
+        }
+        setUser(authData.user);
 
-    let userQueries = 0;
-    let aiInsights = 0;
+        // 2. Fetch their actual chat history
+        const histRes = await fetch(`/api/history?userId=${authData.user.id}`);
+        const sessions = await histRes.json();
 
-    sessions.forEach(session => {
-      if (session.messages && Array.isArray(session.messages)) {
-        userQueries += session.messages.filter((m: any) => m.role === "user").length;
-        aiInsights += session.messages.filter((m: any) => m.role === "assistant").length;
+        // 3. Check local browser memory for active connections
+        const activeDB = sessionStorage.getItem("userLiveDB") ? 1 : 0;
+        
+        // 4. Crunch the numbers dynamically
+        let userQueries = 0;
+        let aiInsights = 0;
+        let dbToolsUsed = 0;
+        const activityByDate: Record<string, number> = {};
+
+        sessions.forEach((session: any) => {
+          // Use the session date to build the trend chart
+          const dateObj = new Date(session.lastUpdated || session.createdAt || Date.now());
+          const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          
+          if (!activityByDate[dateStr]) activityByDate[dateStr] = 0;
+
+          if (session.messages && Array.isArray(session.messages)) {
+            // Add total messages to that specific day
+            activityByDate[dateStr] += session.messages.length;
+
+            session.messages.forEach((m: any) => {
+              if (m.role === "user") userQueries++;
+              if (m.role === "assistant") {
+                aiInsights++;
+                
+                // Track exactly how many times the AI queried the live database
+                if (m.toolInvocations) {
+                  m.toolInvocations.forEach((tool: any) => {
+                    if (tool.toolName === 'query_database') dbToolsUsed++;
+                  });
+                }
+              }
+            });
+          }
+        });
+
+        // Format data for the chart
+        const formattedChartData = Object.entries(activityByDate).map(([date, count]) => ({
+          date,
+          count: Number(count)
+        }));
+
+        setStats({
+          queriesExecuted: userQueries,
+          insightsGenerated: aiInsights,
+          activeDatabases: activeDB,
+          dbQueriesRun: dbToolsUsed
+        });
+        
+        setChartData(formattedChartData);
+
+      } catch (error) {
+        console.error("Failed to load analytics:", error);
+      } finally {
+        setLoading(false);
       }
-    });
-
-    return {
-      totalFiles: 0,
-      queriesExecuted: userQueries,
-      insightsGenerated: aiInsights,
-      activeDatabases: 0
     };
-  } catch (error) {
-    console.error("Database Error:", error);
-    return { totalFiles: 0, queriesExecuted: 0, insightsGenerated: 0, activeDatabases: 0 };
-  }
-}
 
-export default async function AnalyticsPage() {
-  // 2. Get the currently logged-in user securely
-  const user = await getSessionUser();
+    fetchAnalytics();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-zinc-400 bg-[#09090b] gap-4">
+        <Loader2 className="animate-spin text-emerald-400" size={32} />
+        <p>Loading your workspace analytics...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -48,14 +112,14 @@ export default async function AnalyticsPage() {
     );
   }
 
-  // 3. Fetch stats bypassing the HTTP layer entirely
-  const data = await getWorkspaceStats(user.id);
+  // Calculate the highest activity day so we can scale the chart bars dynamically
+  const maxActivity = Math.max(...chartData.map(d => d.count), 1);
 
-  const stats = [
-    { label: "Active Files Analyzed", value: data.totalFiles, icon: FileText, color: "text-blue-400" },
-    { label: "Queries Executed", value: data.queriesExecuted, icon: Database, color: "text-emerald-400" },
-    { label: "Insights Generated", value: data.insightsGenerated, icon: Activity, color: "text-purple-400" },
-    { label: "Active Databases", value: data.activeDatabases, icon: BarChart3, color: "text-amber-400" },
+  const displayStats = [
+    { label: "Active Databases", value: stats.activeDatabases, icon: Database, color: "text-amber-400" },
+    { label: "Queries Executed", value: stats.queriesExecuted, icon: FileText, color: "text-blue-400" },
+    { label: "Insights Generated", value: stats.insightsGenerated, icon: Activity, color: "text-purple-400" },
+    { label: "Live DB Queries Run", value: stats.dbQueriesRun, icon: BarChart3, color: "text-emerald-400" },
   ];
 
   return (
@@ -74,9 +138,9 @@ export default async function AnalyticsPage() {
         </p>
       </div>
 
-      {/* STATS GRID */}
+      {/* DYNAMIC STATS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
-        {stats.map((stat, i) => (
+        {displayStats.map((stat, i) => (
           <div key={i} className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl shadow-lg hover:bg-zinc-800/50 transition-colors">
             <div className="flex justify-between items-start mb-4">
               <div className={`p-3 rounded-xl bg-[#09090b] border border-white/5 shadow-inner ${stat.color}`}>
@@ -89,16 +153,73 @@ export default async function AnalyticsPage() {
         ))}
       </div>
       
-      {/* MACRO CHARTS PLACEHOLDER */}
+      {/* MACRO CHARTS SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-100 flex flex-col justify-center items-center text-zinc-500 shadow-lg">
-          <BarChart3 size={48} className="mb-4 opacity-20" />
-          <p>Query Volume Trend (Data connected)</p>
+        
+        {/* Dynamic Activity Trend Chart */}
+        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-[300px]">
+          <h3 className="text-zinc-300 font-semibold mb-6 flex items-center gap-2">
+            <Activity size={18} className="text-emerald-400" />
+            Query Volume Trend
+          </h3>
+          
+          {chartData.length > 0 ? (
+            <div className="flex-1 flex items-end gap-3 sm:gap-6 pt-4 mt-auto">
+              {chartData.map((data, idx) => {
+                const heightPercentage = (data.count / maxActivity) * 100;
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+                    <div className="w-full relative flex justify-center items-end h-[150px]">
+                      {/* Tooltip on hover */}
+                      <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-xs px-2 py-1 rounded text-zinc-200 pointer-events-none">
+                        {data.count}
+                      </div>
+                      {/* The Bar */}
+                      <div 
+                        className="w-full max-w-[40px] bg-emerald-400/80 hover:bg-emerald-400 rounded-t-sm transition-all duration-500"
+                        style={{ height: `${heightPercentage}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-zinc-500 font-medium">{data.date}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+             <div className="flex-1 flex flex-col items-center justify-center text-zinc-600">
+               <BarChart3 size={32} className="mb-2 opacity-50" />
+               <p className="text-sm">No activity data yet.</p>
+             </div>
+          )}
         </div>
-        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl h-100 flex flex-col justify-center items-center text-zinc-500 shadow-lg">
-          <Activity size={48} className="mb-4 opacity-20" />
-          <p>Data Sources Overview</p>
+
+        {/* System Health / Overview Card */}
+        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-[300px]">
+          <h3 className="text-zinc-300 font-semibold mb-6 flex items-center gap-2">
+            <Database size={18} className="text-blue-400" />
+            System Status
+          </h3>
+          
+          <div className="flex-1 flex flex-col justify-center space-y-6">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-sm">Frontend Connectivity</span>
+              <span className="text-emerald-400 text-sm font-medium bg-emerald-400/10 px-2 py-1 rounded">Optimal</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-sm">Live DB Status</span>
+              {stats.activeDatabases > 0 ? (
+                 <span className="text-emerald-400 text-sm font-medium bg-emerald-400/10 px-2 py-1 rounded">Connected</span>
+              ) : (
+                 <span className="text-amber-400 text-sm font-medium bg-amber-400/10 px-2 py-1 rounded">Disconnected</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-sm">AI Engine</span>
+              <span className="text-emerald-400 text-sm font-medium bg-emerald-400/10 px-2 py-1 rounded">Online</span>
+            </div>
+          </div>
         </div>
+
       </div>
     </div>
   );

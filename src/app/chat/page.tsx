@@ -22,14 +22,18 @@ function ActiveChatInterface() {
   const [isUploading, setIsUploading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   
-  // 1. New state to hold the securely logged-in user
+  // 1. User State
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // 2. LIVE DATABASE STATE (New)
+  const [dbConnectionString, setDbConnectionString] = useState<string | null>(null);
+  const [dbSchema, setDbSchema] = useState<any>(null);
   
   const messagesRef = useRef<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 2. Fetch the real user ID when the chat loads
+  // Fetch the real user ID when the chat loads
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -45,14 +49,28 @@ function ActiveChatInterface() {
     fetchUser();
   }, []);
 
+  // Fetch the Live Database credentials from the ConnectDBModal (New)
+  useEffect(() => {
+    const savedDB = sessionStorage.getItem("userLiveDB");
+    const savedSchema = sessionStorage.getItem("userDBSchema");
+    
+    if (savedDB) setDbConnectionString(savedDB);
+    if (savedSchema) setDbSchema(JSON.parse(savedSchema));
+  }, []);
+
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
   // --- AI CHAT SETUP ---
   const { messages, isLoading, setMessages, append, reload } = useChat({
-    // 3. Pass the sessionId so the backend knows which chat to update!
-    body: { data: fileContext, sessionId: activeSessionIdRef.current },
+    // 3. Updated Body: Now sends CSV data AND Live Database info to the backend
+    body: { 
+      data: fileContext, 
+      sessionId: activeSessionIdRef.current,
+      connectionString: dbConnectionString,
+      schema: dbSchema
+    },
     
     onFinish: async (message) => {
       let fullHistory = [...messagesRef.current];
@@ -62,14 +80,14 @@ function ActiveChatInterface() {
         fullHistory = fullHistory.map(m => m.id === message.id ? message : m);
       }
 
-      // 4. Save to DB and update the URL ONLY if we have the real user
+      // Save to DB and update the URL ONLY if we have the real user
       if (currentUser) {
         try {
           const res = await fetch("/api/history", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              userId: currentUser.id, // THE FIX: Real User ID
+              userId: currentUser.id,
               sessionId: activeSessionIdRef.current, 
               messages: fullHistory, 
             }),
@@ -116,10 +134,9 @@ function ActiveChatInterface() {
   // --- HISTORY LOADER ---
   useEffect(() => {
     const loadHistory = async () => {
-      // 5. Wait until we have BOTH the sessionId and the real user data
+      // Wait until we have BOTH the sessionId and the real user data
       if (urlSessionId && currentUser) {
         try {
-          // THE FIX: Fetch using their actual user ID
           const res = await fetch(`/api/history?userId=${currentUser.id}`);
           const allSessions = await res.json();
           const currentSession = allSessions.find((s: any) => s._id === urlSessionId);
@@ -134,7 +151,7 @@ function ActiveChatInterface() {
       }
     };
     loadHistory();
-  }, [urlSessionId, setMessages, currentUser]); // Re-run when currentUser loads
+  }, [urlSessionId, setMessages, currentUser]); 
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
