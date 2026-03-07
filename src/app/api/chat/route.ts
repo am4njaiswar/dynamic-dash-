@@ -32,8 +32,6 @@ export async function POST(req: Request) {
        - CLEARLY label the X-axis for these future points (e.g., "Q4 (Proj)").
        - In your text response, explicitly list 2-3 actionable business decisions.`;
 
-    // 👉 NEW PRIORITY LOGIC: CSV Overrides Database 👈
-
     // 1. HIGHEST PRIORITY: Handle CSV Data State
     if (data && Array.isArray(data)) {
       const safeData = data.slice(0, 200); 
@@ -56,7 +54,6 @@ export async function POST(req: Request) {
 
     console.log("Starting Gemini Stream...");
 
-    // Static Tools Definition to prevent AI_NoSuchToolError
     const staticTools = {
       render_chart: tool({
         description: "Renders a bar, line, area, or pie chart based on the provided data.",
@@ -83,7 +80,6 @@ export async function POST(req: Request) {
         }),
         execute: async ({ collectionName, filter, sort }) => {
           
-          // INTERNAL FIREWALL: Gracefully handle queries if disconnected or focusing on CSV
           if (!connectionString) {
              console.log("Blocked AI from querying DB while disconnected.");
              return { error: "Database is currently disconnected. Inform the user they must connect a database to use this feature." };
@@ -144,7 +140,7 @@ export async function POST(req: Request) {
       },
 
       onError: (error) => {
-        console.error("🚨 Stream Error Caught:", error);
+        console.error("Stream Error Caught:", error);
       }
     });
 
