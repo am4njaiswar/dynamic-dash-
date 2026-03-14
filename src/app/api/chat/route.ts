@@ -1,4 +1,4 @@
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { streamText, tool } from "ai";
 import { z } from "zod";
 import mongoose from "mongoose";
@@ -16,7 +16,11 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
-    const { messages, data, sessionId, connectionString, schema } = await req.json();
+    const { messages, data, sessionId, connectionString, schema, apiKey } = await req.json();
+
+    const customGoogle = createGoogleGenerativeAI({
+      apiKey: apiKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    });
 
     let systemPrompt = `You are an expert data scientist, business strategist, and enterprise AI assistant. 
     
@@ -106,7 +110,7 @@ export async function POST(req: Request) {
     };
 
     const result = streamText({
-      model: google("gemini-2.5-flash"), 
+      model: customGoogle("gemini-2.5-flash"), 
       messages,
       system: systemPrompt,
       maxSteps: 5, 

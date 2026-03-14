@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { Paperclip, User, Command, RefreshCw, X, FileText } from "lucide-react";
+import { Paperclip, User, Command, RefreshCw, X, FileText, Key, AlertCircle } from "lucide-react";
 import { useRef, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -11,6 +11,10 @@ import ChartDisplay from "@/components/ChartsDisplay";
 
 function ActiveChatInterface() {
   const router = useRouter();
+  
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get("sessionId");
 
@@ -22,10 +26,8 @@ function ActiveChatInterface() {
   const [isUploading, setIsUploading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   
-  // 1. User State
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // 2. LIVE DATABASE STATE (New)
   const [dbConnectionString, setDbConnectionString] = useState<string | null>(null);
   const [dbSchema, setDbSchema] = useState<any>(null);
   
@@ -33,7 +35,11 @@ function ActiveChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch the real user ID when the chat loads
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) setApiKey(savedKey);
+  }, []);
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -49,7 +55,6 @@ function ActiveChatInterface() {
     fetchUser();
   }, []);
 
-  // Fetch the Live Database credentials from the ConnectDBModal (New)
   useEffect(() => {
     const savedDB = sessionStorage.getItem("userLiveDB");
     const savedSchema = sessionStorage.getItem("userDBSchema");
@@ -62,14 +67,13 @@ function ActiveChatInterface() {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
-  // --- AI CHAT SETUP ---
-  const { messages, isLoading, setMessages, append, reload } = useChat({
-    // 3. Updated Body: Now sends CSV data AND Live Database info to the backend
+  const { messages, isLoading, setMessages, append, reload, error } = useChat({
     body: { 
       data: fileContext, 
       sessionId: activeSessionIdRef.current,
       connectionString: dbConnectionString,
-      schema: dbSchema
+      schema: dbSchema,
+      apiKey: typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : undefined
     },
     
     onFinish: async (message) => {
@@ -80,7 +84,6 @@ function ActiveChatInterface() {
         fullHistory = fullHistory.map(m => m.id === message.id ? message : m);
       }
 
-      // Save to DB and update the URL ONLY if we have the real user
       if (currentUser) {
         try {
           const res = await fetch("/api/history", {
@@ -94,7 +97,6 @@ function ActiveChatInterface() {
           });
           
           const savedSession = await res.json();
-          // Update the URL so it doesn't stay blank
           if (!activeSessionIdRef.current && savedSession._id) {
             setActiveSessionId(savedSession._id);
             router.replace(`/chat?sessionId=${savedSession._id}`, { scroll: false });
@@ -106,7 +108,15 @@ function ActiveChatInterface() {
     },
   });
 
-  // --- CATCH THE HANDOFF FROM HOME PAGE ---
+  useEffect(() => {
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      if (errMsg.includes("429") || errMsg.includes("quota") || errMsg.includes("exceeded")) {
+        setShowApiKeyModal(true);
+      }
+    }
+  }, [error]);
+
   useEffect(() => {
     const initialPrompt = sessionStorage.getItem("dash_initial_prompt");
     const initialFileStr = sessionStorage.getItem("dash_initial_file");
@@ -131,10 +141,8 @@ function ActiveChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // --- HISTORY LOADER ---
   useEffect(() => {
     const loadHistory = async () => {
-      // Wait until we have BOTH the sessionId and the real user data
       if (urlSessionId && currentUser) {
         try {
           const res = await fetch(`/api/history?userId=${currentUser.id}`);
@@ -187,8 +195,69 @@ function ActiveChatInterface() {
     <div className="relative flex flex-col h-[calc(100vh-64px)] overflow-hidden w-full max-w-5xl mx-auto px-3 sm:px-6">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".csv" />
 
+      <AnimatePresence>
+        {showApiKeyModal && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-zinc-950 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6 relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-emerald-500 to-teal-400" />
+              
+              <button onClick={() => setShowApiKeyModal(false)} className="absolute top-5 right-5 text-zinc-500 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-5 mt-2">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <AlertCircle size={20} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-100 tracking-tight">Daily Limit Reached</h2>
+                  <p className="text-[13px] text-zinc-400">Add your API key to continue.</p>
+                </div>
+              </div>
+              
+              <p className="text-sm text-zinc-300 mb-5 leading-relaxed">
+                You've hit the free tier limit for Dynamic Dash today. To keep chatting and generating charts, please enter your personal Gemini API key.
+              </p>
+              
+              <input 
+                type="password" 
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Paste Gemini API Key (AIzaSy...)"
+                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3.5 text-sm text-zinc-200 focus:outline-none focus:border-emerald-500/50 transition-colors mb-6 shadow-inner"
+              />
+              
+              <div className="flex gap-3 justify-end">
+                <button 
+                  onClick={() => setShowApiKeyModal(false)}
+                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    localStorage.setItem('gemini_api_key', apiKey);
+                    setShowApiKeyModal(false);
+                    reload(); // Auto-retry their last message!
+                  }}
+                  className="px-5 py-2.5 rounded-xl text-sm font-medium bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                >
+                  Save & Resume
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 overflow-y-auto mt-20 sm:mt-24 pt-4 pb-4 scroll-smooth no-scrollbar w-full">
         <div className="space-y-6 sm:space-y-8 max-w-4xl mx-auto w-full">
+          
           <AnimatePresence mode="popLayout">
             {messages.map((m, index) => (
               <motion.div
@@ -261,6 +330,13 @@ function ActiveChatInterface() {
                 <div className="text-zinc-500 text-[13px] sm:text-sm py-1 animate-pulse">Analyzing data...</div>
              </motion.div>
           )}
+          
+          {error && !showApiKeyModal && (
+            <div className="text-red-400 text-sm mt-2 text-center bg-red-900/10 p-3 rounded-lg border border-red-500/20">
+              An error occurred: {error.message}. Please try again.
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
       </div>

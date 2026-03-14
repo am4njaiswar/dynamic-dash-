@@ -3,21 +3,18 @@ import { Spotlight } from "@/components/ui/spotlight-new";
 import Link from "next/link"; 
 import { getSessionUser } from "@/lib/auth";
 import { dbConnect } from "@/lib/db";
-import { ChatSession } from "@/models/ChatSessionSchema"; // Ensure this matches the path used in Analytics
+import { ChatSession } from "@/models/ChatSessionSchema";
 
 export const dynamic = "force-dynamic";
 
-// 1. Direct Database Query instead of using fetch()
 async function getHistorySessions(userId: string) {
   try {
     await dbConnect();
     
-    // 2. Fetch sessions, sort by newest first, and lean() to plain JS objects
     const sessions = await ChatSession.find({ userId })
       .sort({ lastUpdated: -1 })
       .lean();
     
-    // 3. Serialize the data so Next.js Server Components don't complain about MongoDB objects
     return sessions.map((session: any) => ({
       ...session,
       _id: session._id.toString(),
@@ -30,7 +27,6 @@ async function getHistorySessions(userId: string) {
 }
 
 export default async function HistoryPage() {
-  // 4. Securely get the logged-in user
   const user = await getSessionUser();
 
   if (!user) {
@@ -41,7 +37,6 @@ export default async function HistoryPage() {
     );
   }
 
-  // 5. Fetch history bypassing the HTTP layer entirely
   const sessions = await getHistorySessions(user.id);
 
   return (
@@ -71,13 +66,11 @@ export default async function HistoryPage() {
         </div>
       </div>
 
-      {/* HISTORY LIST */}
       <div className="space-y-3">
         {sessions.length > 0 ? (
           sessions.map((session: any) => {
             const totalMessages = session.messages?.length || 0;
             
-            // Generate a smart title from the user's first prompt
             const firstUserMsg = session.messages?.find((m: any) => m.role === "user")?.content;
             const title = firstUserMsg 
               ? (firstUserMsg.length > 60 ? firstUserMsg.substring(0, 60) + "..." : firstUserMsg)
