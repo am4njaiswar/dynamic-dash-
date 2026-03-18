@@ -19,7 +19,7 @@ export default function Navbar() {
   
   // Modal & DB State
   const [isModalOpen, setIsModalOpen] = useState(false); 
-  const [isDbConnected, setIsDbConnected] = useState(false); // <-- NEW: Track DB status
+  const [isDbConnected, setIsDbConnected] = useState(false); 
 
   // 1. Check Auth Status
   useEffect(() => {
@@ -40,14 +40,14 @@ export default function Navbar() {
     checkAuth();
   }, [pathname]);
 
-  // 2. NEW: Check DB Connection Status (Runs on load, and whenever the modal closes)
+  // 2. Check DB Connection Status
   useEffect(() => {
     const checkDb = () => {
       const connected = sessionStorage.getItem("userLiveDB");
       setIsDbConnected(!!connected);
     };
     checkDb();
-  }, [isModalOpen, pathname]); // Re-checks when modal closes so the button updates instantly!
+  }, [isModalOpen, pathname]); 
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -55,22 +55,18 @@ export default function Navbar() {
     router.push("/login");
   };
 
-  // 3. NEW: Disconnect function
+  // 3. Disconnect function
   const handleDisconnect = () => {
     sessionStorage.removeItem("userLiveDB");
     sessionStorage.removeItem("userDBSchema");
     setIsDbConnected(false);
-    
-    // Reload the page to ensure the chat clears its context of the old DB
     window.location.reload();
   };
 
-  // Base navigation always available
   const navItems = [
     { name: "Chat", link: "/", icon: <MessageSquare className="h-4 w-4" /> },
   ];
 
-  // Add protected navigation if logged in
   if (isAuthenticated) {
     navItems.push(
       { name: "History", link: "/history", icon: <Clock className="h-4 w-4" /> },
@@ -89,7 +85,8 @@ export default function Navbar() {
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="pointer-events-auto relative flex items-center justify-between gap-6 px-6 py-3 rounded-full bg-[#09090b]/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] min-w-85 sm:min-w-187.5"
+          // Slightly adjusted mobile padding to prevent cramping
+          className="pointer-events-auto relative flex items-center justify-between gap-3 sm:gap-6 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full bg-[#09090b]/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] w-[90%] sm:w-auto sm:min-w-187.5 max-w-2xl"
         >
           {/* LEFT: LOGO */}
           <Link href="/" className="flex items-center gap-2">
@@ -99,7 +96,7 @@ export default function Navbar() {
           </Link>
 
           {/* MIDDLE: LINKS */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {navItems.map((item, idx) => {
               const isActive = 
                 item.link === "/" 
@@ -112,7 +109,7 @@ export default function Navbar() {
                   href={item.link}
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
-                  className="relative px-5 py-2.5 rounded-full text-sm font-medium transition-colors"
+                  className="relative px-3 sm:px-5 py-2.5 rounded-full text-sm font-medium transition-colors"
                 >
                   <span className={cn("relative z-10 transition-colors duration-200 flex items-center gap-2", isActive ? "text-white" : "text-zinc-400 hover:text-zinc-200")}>
                     <span className="sm:hidden">{item.icon}</span>
@@ -137,32 +134,42 @@ export default function Navbar() {
           </div>
 
           {/* RIGHT: CONNECT/DISCONNECT DB OR LOGIN/SIGNUP */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {!isLoading && (
               isAuthenticated ? (
-                // 4. NEW: Conditional rendering for Connect vs Disconnect
-                isDbConnected ? (
+                <>
+                  {isDbConnected ? (
+                    <button 
+                      onClick={handleDisconnect}
+                      className="hidden sm:flex items-center gap-2 bg-transparent border border-red-500/50 hover:bg-red-500/10 text-red-400 px-5 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_15px_rgba(239,68,68,0.1)] hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+                    >
+                      <DatabaseZap size={16} />
+                      Disconnect DB
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => setIsModalOpen(true)} 
+                      className="hidden sm:flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-5 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                    >
+                      Connect DB
+                    </button>
+                  )}
+                  
+                  {/* 👉 NEW: MOBILE LOGOUT BUTTON (Only shows on small screens inside the pill) */}
                   <button 
-                    onClick={handleDisconnect}
-                    className="hidden sm:flex items-center gap-2 bg-transparent border border-red-500/50 hover:bg-red-500/10 text-red-400 px-5 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_15px_rgba(239,68,68,0.1)] hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+                    onClick={handleLogout}
+                    className="sm:hidden flex items-center justify-center p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"
+                    title="Logout"
                   >
-                    <DatabaseZap size={16} />
-                    Disconnect DB
+                    <LogOut size={18} />
                   </button>
-                ) : (
-                  <button 
-                    onClick={() => setIsModalOpen(true)} 
-                    className="hidden sm:flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-5 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-                  >
-                    Connect DB
-                  </button>
-                )
+                </>
               ) : (
                 <>
-                  <Link href="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors px-3 py-2">
+                  <Link href="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors px-2 sm:px-3 py-2">
                     Log in
                   </Link>
-                  <Link href="/register" className="text-sm font-bold bg-white text-black px-4 py-2 rounded-full hover:bg-zinc-200 transition-colors shadow-lg">
+                  <Link href="/register" className="text-[13px] sm:text-sm font-bold bg-white text-black px-3 sm:px-4 py-2 rounded-full hover:bg-zinc-200 transition-colors shadow-lg">
                     Sign Up
                   </Link>
                 </>
@@ -179,7 +186,8 @@ export default function Navbar() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.3 }}
-              className="absolute top-1/2 -translate-y-1/2 right-4 sm:right-6 md:right-10 pointer-events-auto flex items-center"
+              // 👉 NEW: Added `hidden sm:flex` so this floating button vanishes on mobile
+              className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-4 sm:right-6 md:right-10 pointer-events-auto items-center"
             >
               <button 
                 onClick={handleLogout}
