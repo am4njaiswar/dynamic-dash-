@@ -123,7 +123,7 @@ export default function AnalyticsPage() {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen pt-32 pb-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto w-full relative">
+    <div className="flex flex-col min-h-screen pt-32 pb-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto w-full relative overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       <div className="fixed inset-0 w-full h-full pointer-events-none z-[-1]">
         <Spotlight />
       </div>
@@ -157,7 +157,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Dynamic Activity Trend Chart */}
-        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-[300px]">
+        <div className="lg:col-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-75">
           <h3 className="text-zinc-300 font-semibold mb-6 flex items-center gap-2">
             <Activity size={18} className="text-emerald-400" />
             Query Volume Trend
@@ -169,14 +169,14 @@ export default function AnalyticsPage() {
                 const heightPercentage = (data.count / maxActivity) * 100;
                 return (
                   <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                    <div className="w-full relative flex justify-center items-end h-[150px]">
+                    <div className="w-full relative flex justify-center items-end h-37.5">
                       {/* Tooltip on hover */}
                       <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-xs px-2 py-1 rounded text-zinc-200 pointer-events-none">
                         {data.count}
                       </div>
                       {/* The Bar */}
                       <div 
-                        className="w-full max-w-[40px] bg-emerald-400/80 hover:bg-emerald-400 rounded-t-sm transition-all duration-500"
+                        className="w-full max-w-10 bg-emerald-400/80 hover:bg-emerald-400 rounded-t-sm transition-all duration-500"
                         style={{ height: `${heightPercentage}%` }}
                       />
                     </div>
@@ -194,7 +194,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* System Health / Overview Card */}
-        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-[300px]">
+        <div className="bg-zinc-900/50 backdrop-blur-md border border-white/5 p-6 rounded-2xl flex flex-col shadow-lg min-h-75">
           <h3 className="text-zinc-300 font-semibold mb-6 flex items-center gap-2">
             <Database size={18} className="text-blue-400" />
             System Status
